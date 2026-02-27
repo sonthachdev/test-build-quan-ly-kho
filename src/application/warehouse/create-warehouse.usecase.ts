@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { IWarehouseRepository } from '../../domain/warehouse/warehouse.repository.js';
+import { roundToTwo } from '../../common/utils/number.util.js';
 import { HistoryWarehouseService } from '../history-warehouse/history-warehouse.service.js';
 import { CreateWarehouseDto } from './dto/create-warehouse.dto.js';
 
@@ -21,14 +22,13 @@ export class CreateWarehouseUseCase {
   async execute(dto: CreateWarehouseDto, createdBy: string) {
     this.logger.log(`Creating warehouse item: ${dto.item} ${dto.inches}"`);
 
-    const existingWarehouse =
-      await this.warehouseRepository.findByAttributes(
-        dto.inches,
-        dto.item,
-        dto.quality,
-        dto.style,
-        dto.color,
-      );
+    const existingWarehouse = await this.warehouseRepository.findByAttributes(
+      dto.inches,
+      dto.item,
+      dto.quality,
+      dto.style,
+      dto.color,
+    );
 
     if (existingWarehouse) {
       this.logger.warn(
@@ -43,13 +43,13 @@ export class CreateWarehouseUseCase {
       quality: dto.quality,
       style: dto.style,
       color: dto.color,
-      totalAmount: dto.totalAmount,
+      totalAmount: roundToTwo(dto.totalAmount),
       amountOccupied: 0,
-      amountAvailable: dto.totalAmount,
+      amountAvailable: roundToTwo(dto.totalAmount),
       unitOfCalculation: dto.unitOfCalculation,
-      priceHigh: dto.priceHigh ?? 0,
-      priceLow: dto.priceLow ?? 0,
-      sale: dto.sale ?? 0,
+      priceHigh: roundToTwo(dto.priceHigh ?? 0),
+      priceLow: roundToTwo(dto.priceLow ?? 0),
+      sale: roundToTwo(dto.sale ?? 0),
       createdBy,
     });
 

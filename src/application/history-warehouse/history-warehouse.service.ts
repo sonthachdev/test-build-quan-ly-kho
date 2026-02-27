@@ -3,6 +3,7 @@ import {
   HistoryEnterType,
   HistoryExportState,
 } from '../../common/enums/index.js';
+import { roundToTwo } from '../../common/utils/number.util.js';
 import type { IHistoryEnterRepository } from '../../domain/history-warehouse/history-enter.repository.js';
 import type { IHistoryExportRepository } from '../../domain/history-warehouse/history-export.repository.js';
 import type { IOrderRepository } from '../../domain/order/order.repository.js';
@@ -43,10 +44,10 @@ export class HistoryWarehouseService {
       color: warehouse.color,
       type: HistoryEnterType.TAO_MOI,
       metadata: {
-        totalAmount: warehouse.totalAmount,
-        priceHigh: warehouse.priceHigh,
-        priceLow: warehouse.priceLow,
-        sale: warehouse.sale,
+        totalAmount: roundToTwo(warehouse.totalAmount),
+        priceHigh: roundToTwo(warehouse.priceHigh),
+        priceLow: roundToTwo(warehouse.priceLow),
+        sale: roundToTwo(warehouse.sale),
       },
       note: 'Khởi tạo',
       createdBy,
@@ -77,7 +78,7 @@ export class HistoryWarehouseService {
       color: warehouse.color,
       type: HistoryEnterType.NHAP_THEM_HANG,
       metadata: {
-        quantity,
+        quantity: roundToTwo(quantity),
       },
       note: note || '',
       createdBy,
@@ -109,7 +110,7 @@ export class HistoryWarehouseService {
       color: warehouse.color,
       type: HistoryEnterType.HOAN_DON,
       metadata: {
-        quantityRevert,
+        quantityRevert: roundToTwo(quantityRevert),
         orderId,
       },
       note: note || '',
@@ -147,12 +148,12 @@ export class HistoryWarehouseService {
       color: warehouse.color,
       type: HistoryEnterType.SUA_GIA,
       metadata: {
-        priceHighOld,
-        priceHighNew,
-        priceLowOld,
-        priceLowNew,
-        saleOld,
-        saleNew,
+        priceHighOld: roundToTwo(priceHighOld),
+        priceHighNew: roundToTwo(priceHighNew),
+        priceLowOld: roundToTwo(priceLowOld),
+        priceLowNew: roundToTwo(priceLowNew),
+        saleOld: roundToTwo(saleOld),
+        saleNew: roundToTwo(saleNew),
       },
       note,
       createdBy,
@@ -178,9 +179,9 @@ export class HistoryWarehouseService {
       color: warehouse.color,
       type: HistoryEnterType.XOA,
       metadata: {
-        totalAmount: warehouse.totalAmount,
-        amountOccupied: warehouse.amountOccupied,
-        amountAvailable: warehouse.amountAvailable,
+        totalAmount: roundToTwo(warehouse.totalAmount),
+        amountOccupied: roundToTwo(warehouse.amountOccupied),
+        amountAvailable: roundToTwo(warehouse.amountAvailable),
       },
       note: 'Xóa nguyên liệu',
       createdBy,
@@ -230,16 +231,16 @@ export class HistoryWarehouseService {
       quality: warehouse.quality,
       style: warehouse.style,
       color: warehouse.color,
-      priceHigh: warehouse.priceHigh,
-      priceLow: warehouse.priceLow,
-      sale: warehouse.sale,
+      priceHigh: roundToTwo(warehouse.priceHigh),
+      priceLow: roundToTwo(warehouse.priceLow),
+      sale: roundToTwo(warehouse.sale),
       orderId,
       type: order.type,
-      priceOrder: orderItem.price,
-      saleOrder: orderItem.sale,
-      quantityOrder,
+      priceOrder: roundToTwo(orderItem.price),
+      saleOrder: roundToTwo(orderItem.sale),
+      quantityOrder: roundToTwo(quantityOrder),
       stateOrder,
-      paymentOrder,
+      paymentOrder: roundToTwo(paymentOrder),
       note: note || '',
       createdBy,
     });
@@ -256,10 +257,13 @@ export class HistoryWarehouseService {
     }
     for (const product of order.products) {
       for (const item of product.items) {
+        const quantitySet = product.quantitySet ?? 1;
+        const quantityOrder = roundToTwo(quantitySet * item.quantity);
+
         await this.createHistoryExportForOrder(
           String(item.id),
           orderId,
-          item.quantity,
+          quantityOrder,
           HistoryExportState.BAO_GIA,
           0,
           '',
@@ -275,15 +279,20 @@ export class HistoryWarehouseService {
   ): Promise<void> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
-      this.logger.warn(`Order ${orderId} not found for history-export confirmed`);
+      this.logger.warn(
+        `Order ${orderId} not found for history-export confirmed`,
+      );
       return;
     }
     for (const product of order.products) {
       for (const item of product.items) {
+        const quantitySet = product.quantitySet ?? 1;
+        const quantityOrder = roundToTwo(quantitySet * item.quantity);
+
         await this.createHistoryExportForOrder(
           String(item.id),
           orderId,
-          item.quantity,
+          quantityOrder,
           HistoryExportState.DA_CHOT,
           0,
           '',
@@ -304,10 +313,13 @@ export class HistoryWarehouseService {
     }
     for (const product of order.products) {
       for (const item of product.items) {
+        const quantitySet = product.quantitySet ?? 1;
+        const quantityOrder = roundToTwo(quantitySet * item.quantity);
+
         await this.createHistoryExportForOrder(
           String(item.id),
           orderId,
-          item.quantity,
+          quantityOrder,
           HistoryExportState.CHINH_SUA,
           0,
           '',
@@ -326,17 +338,18 @@ export class HistoryWarehouseService {
   ): Promise<void> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
-      this.logger.warn(
-        `Order ${orderId} not found for history-export payment`,
-      );
+      this.logger.warn(`Order ${orderId} not found for history-export payment`);
       return;
     }
     for (const product of order.products) {
       for (const item of product.items) {
+        const quantitySet = product.quantitySet ?? 1;
+        const quantityOrder = roundToTwo(quantitySet * item.quantity);
+
         await this.createHistoryExportForOrder(
           String(item.id),
           orderId,
-          item.quantity,
+          quantityOrder,
           stateOrder,
           paymentOrder,
           note,
@@ -359,10 +372,13 @@ export class HistoryWarehouseService {
     }
     for (const product of order.products) {
       for (const item of product.items) {
+        const quantitySet = product.quantitySet ?? 1;
+        const quantityOrder = roundToTwo(quantitySet * item.quantity);
+
         await this.createHistoryExportForOrder(
           String(item.id),
           orderId,
-          item.quantity,
+          quantityOrder,
           HistoryExportState.DA_XONG,
           0,
           '',

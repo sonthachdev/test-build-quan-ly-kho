@@ -11,6 +11,7 @@ import { HISTORY_WAREHOUSE_EVENTS } from '../../common/constants/events.js';
 import type { ICustomerRepository } from '../../domain/customer/customer.repository.js';
 import type { IOrderRepository } from '../../domain/order/order.repository.js';
 import type { IWarehouseRepository } from '../../domain/warehouse/warehouse.repository.js';
+import { roundToTwo } from '../../common/utils/number.util.js';
 import { UpdateOrderDto } from './dto/update-order.dto.js';
 
 @Injectable()
@@ -42,10 +43,13 @@ export class UpdateOrderUseCase {
     if (dto.products) {
       for (const product of existingOrder.products) {
         for (const item of product.items) {
+          const quantitySet = product.quantitySet ?? 1;
+          const occupiedQuantity = roundToTwo(quantitySet * item.quantity);
+
           await this.warehouseRepository.updateStock(
             item.id,
-            -item.quantity,
-            item.quantity,
+            -occupiedQuantity,
+            occupiedQuantity,
           );
         }
       }
@@ -59,30 +63,40 @@ export class UpdateOrderUseCase {
               `Warehouse với id ${item.id} không tồn tại`,
             );
           }
-          if (warehouse.amountAvailable < item.quantity) {
+          const quantitySet = product.quantitySet ?? 1;
+          const requiredQuantity = roundToTwo(quantitySet * item.quantity);
+
+          if (warehouse.amountAvailable < requiredQuantity) {
             throw new BadRequestException(
-              `Warehouse ${item.id} không đủ số lượng khả dụng. Hiện có: ${warehouse.amountAvailable}, yêu cầu: ${item.quantity}`,
+              `Warehouse ${item.id} không đủ số lượng khả dụng. Hiện có: ${warehouse.amountAvailable}, yêu cầu: ${requiredQuantity}`,
             );
           }
 
           if (!product.isCalcSet) {
-            totalPriceBase += item.quantity * item.price - (item.sale ?? 0);
+            totalPriceBase = roundToTwo(
+              totalPriceBase + item.quantity * item.price - (item.sale ?? 0),
+            );
           }
         }
 
         if (product.isCalcSet) {
-          totalPriceBase +=
-            (product.quantitySet ?? 1) * (product.priceSet ?? 0) -
-            (product.saleSet ?? 0);
+          totalPriceBase = roundToTwo(
+            totalPriceBase +
+              (product.quantitySet ?? 1) * (product.priceSet ?? 0) -
+              (product.saleSet ?? 0),
+          );
         }
       }
 
       for (const product of dto.products) {
         for (const item of product.items) {
+          const quantitySet = product.quantitySet ?? 1;
+          const occupiedQuantity = roundToTwo(quantitySet * item.quantity);
+
           await this.warehouseRepository.updateStock(
             item.id,
-            item.quantity,
-            -item.quantity,
+            occupiedQuantity,
+            -occupiedQuantity,
           );
         }
       }
@@ -92,18 +106,22 @@ export class UpdateOrderUseCase {
           ? dto.exchangeRate
           : existingOrder.exchangeRate;
 
-      const totalPrice = totalPriceBase * exchangeRate;
+      const totalPrice = roundToTwo(totalPriceBase * exchangeRate);
 
-      const totalPaid = existingOrder.history
-        .filter((h) => h.type === 'khách trả')
-        .reduce((sum, h) => sum + h.moneyPaidNGN, 0);
-      const totalRefunded = existingOrder.history
-        .filter((h) => h.type === 'hoàn tiền')
-        .reduce((sum, h) => sum + h.moneyPaidNGN, 0);
-      const newPayment = totalPaid - totalRefunded - totalPrice;
+      const totalPaid = roundToTwo(
+        existingOrder.history
+          .filter((h) => h.type === 'khách trả')
+          .reduce((sum, h) => sum + h.moneyPaidNGN, 0),
+      );
+      const totalRefunded = roundToTwo(
+        existingOrder.history
+          .filter((h) => h.type === 'hoàn tiền')
+          .reduce((sum, h) => sum + h.moneyPaidNGN, 0),
+      );
+      const newPayment = roundToTwo(totalPaid - totalRefunded - totalPrice);
 
-      const debt = dto.debt ?? existingOrder.debt;
-      const paid = dto.paid ?? existingOrder.paid;
+      const debt = roundToTwo(dto.debt ?? existingOrder.debt);
+      const paid = roundToTwo(dto.paid ?? existingOrder.paid);
 
       const newState =
         existingOrder.state === (OrderState.BAO_GIA as string)
@@ -119,15 +137,16 @@ export class UpdateOrderUseCase {
         state: newState,
         products: dto.products.map((p) => ({
           nameSet: p.nameSet,
-          priceSet: p.priceSet,
-          quantitySet: p.quantitySet,
-          saleSet: p.saleSet,
+          priceSet: p.priceSet != null ? roundToTwo(p.priceSet) : undefined,
+          quantitySet:
+            p.quantitySet != null ? roundToTwo(p.quantitySet) : undefined,
+          saleSet: p.saleSet != null ? roundToTwo(p.saleSet) : undefined,
           isCalcSet: p.isCalcSet ?? false,
           items: p.items.map((i) => ({
             id: i.id,
-            quantity: i.quantity,
-            price: i.price,
-            sale: i.sale ?? 0,
+            quantity: roundToTwo(i.quantity),
+            price: roundToTwo(i.price),
+            sale: roundToTwo(i.sale ?? 0),
             customPrice: i.customPrice ?? false,
             customSale: i.customSale ?? false,
           })),

@@ -1,4 +1,5 @@
 import { WarehouseEntity } from '../../../domain/warehouse/warehouse.entity.js';
+import { roundToTwo } from '../../../common/utils/number.util.js';
 
 export class WarehouseMapper {
   static toDomain(doc: any): WarehouseEntity | null {
@@ -10,13 +11,13 @@ export class WarehouseMapper {
       quality: doc.quality,
       style: doc.style,
       color: doc.color,
-      totalAmount: doc.totalAmount,
-      amountOccupied: doc.amountOccupied,
-      amountAvailable: doc.amountAvailable,
+      totalAmount: roundToTwo(doc.totalAmount),
+      amountOccupied: roundToTwo(doc.amountOccupied),
+      amountAvailable: roundToTwo(doc.amountAvailable),
       unitOfCalculation: doc.unitOfCalculation,
-      priceHigh: doc.priceHigh,
-      priceLow: doc.priceLow,
-      sale: doc.sale,
+      priceHigh: roundToTwo(doc.priceHigh),
+      priceLow: roundToTwo(doc.priceLow),
+      sale: roundToTwo(doc.sale),
       createdBy: doc.createdBy ? doc.createdBy.toString() : null,
       updatedBy: doc.updatedBy ? doc.updatedBy.toString() : null,
       createdAt: doc.createdAt,
@@ -27,6 +28,8 @@ export class WarehouseMapper {
   }
 
   static toDomainList(docs: any[]): WarehouseEntity[] {
-    return docs.map((doc) => WarehouseMapper.toDomain(doc)).filter(Boolean) as WarehouseEntity[];
+    return docs
+      .map((doc) => WarehouseMapper.toDomain(doc))
+      .filter(Boolean) as WarehouseEntity[];
   }
 }

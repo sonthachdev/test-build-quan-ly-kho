@@ -5,6 +5,7 @@ import { HISTORY_WAREHOUSE_EVENTS } from '../../common/constants/events.js';
 import type { ICustomerRepository } from '../../domain/customer/customer.repository.js';
 import type { IOrderRepository } from '../../domain/order/order.repository.js';
 import type { IWarehouseRepository } from '../../domain/warehouse/warehouse.repository.js';
+import { roundToTwo } from '../../common/utils/number.util.js';
 import { AddHistoryDto } from './dto/add-history.dto.js';
 
 @Injectable()
@@ -37,11 +38,13 @@ export class AddHistoryUseCase {
     const isRefund =
       dto.type?.toLowerCase() === HistoryType.HOAN_TIEN.toLowerCase();
 
-    const newPayment = isRefund
-      ? order.payment - dto.moneyPaidNGN
-      : order.payment + dto.moneyPaidNGN;
+    const newPayment = roundToTwo(
+      isRefund
+        ? order.payment - dto.moneyPaidNGN
+        : order.payment + dto.moneyPaidNGN,
+    );
 
-    const newDebt = newPayment < 0 ? -newPayment : 0;
+    const newDebt = roundToTwo(newPayment < 0 ? -newPayment : 0);
 
     const shouldMarkAsDone =
       (order.state as OrderState) !== OrderState.DA_XONG &&
@@ -51,9 +54,12 @@ export class AddHistoryUseCase {
     if (shouldMarkAsDone) {
       for (const product of order.products) {
         for (const item of product.items) {
+          const quantitySet = product.quantitySet ?? 1;
+          const totalQuantity = roundToTwo(quantitySet * item.quantity);
+
           await this.warehouseRepository.decreaseTotalAndOccupied(
             item.id,
-            item.quantity,
+            totalQuantity,
           );
         }
       }
@@ -81,15 +87,18 @@ export class AddHistoryUseCase {
 
     const updatedOrder = await this.orderRepository.addHistory(orderId, {
       type: dto.type,
-      exchangeRate: dto.exchangeRate,
-      moneyPaidNGN: dto.moneyPaidNGN,
-      moneyPaidDolar: dto.moneyPaidDolar,
+      exchangeRate: roundToTwo(dto.exchangeRate),
+      moneyPaidNGN: roundToTwo(dto.moneyPaidNGN),
+      moneyPaidDolar: roundToTwo(dto.moneyPaidDolar),
       paymentMethod: dto.paymentMethod,
       datePaid: dto.datePaid,
       note: dto.note ?? '',
     });
 
-    if (updatedOrder && (updatedOrder.state as OrderState) !== OrderState.BAO_GIA) {
+    if (
+      updatedOrder &&
+      (updatedOrder.state as OrderState) !== OrderState.BAO_GIA
+    ) {
       const customerPayment =
         await this.orderRepository.calculateCustomerPayment(customerId);
 
