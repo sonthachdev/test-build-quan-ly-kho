@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { HistoryType } from '../../common/enums/index.js';
+import { UnitOfCalculation } from '../../common/enums/index.js';
 import { getDateRange } from '../../common/utils/date.util.js';
 import { roundToTwo } from '../../common/utils/number.util.js';
-import { countItemQuantities } from '../../common/utils/order.util.js';
+import { computeOrderFinancials } from '../../common/utils/order-financial.util.js';
 import type { IOrderRepository } from '../../domain/order/order.repository.js';
 import { DashboardQueryDto } from './dto/dashboard-query.dto.js';
 
@@ -13,10 +13,8 @@ interface CustomerAgg {
   totalOrdersKg: number;
   totalOrdersPcs: number;
   totalValueUSD: number;
-  totalCollectedUSD: number;
-  totalDebtUSD: number;
-  totalValueNGN: number;
   totalCollectedNGN: number;
+  totalCollectedUSD: number;
 }
 
 @Injectable()
@@ -56,36 +54,31 @@ export class GetDashboardCustomersUseCase {
           totalOrdersKg: 0,
           totalOrdersPcs: 0,
           totalValueUSD: 0,
-          totalCollectedUSD: 0,
-          totalDebtUSD: 0,
-          totalValueNGN: 0,
           totalCollectedNGN: 0,
+          totalCollectedUSD: 0,
         });
       }
 
       const c = customerMap.get(customerId)!;
       c.totalOrders += 1;
 
-      const orderTotalUsd = (order.totalUsd ?? 0) + (order.debt ?? 0);
-      const orderPaidedUsd = order.paidedUsd ?? 0;
-      const orderExchangeRate = order.exchangeRate ?? 0;
+      // Tính toán tài chính theo rule
+      const financials = computeOrderFinancials(order);
+      c.totalValueUSD += financials.totalUSD;
 
-      c.totalValueUSD += orderTotalUsd;
-      c.totalCollectedUSD += orderPaidedUsd;
-      c.totalDebtUSD += orderTotalUsd - orderPaidedUsd;
-      c.totalValueNGN += orderTotalUsd * orderExchangeRate;
-
-      const { kg, pcs } = countItemQuantities(order.products);
-      c.totalOrdersKg += kg;
-      c.totalOrdersPcs += pcs;
-
-      for (const history of order.history ?? []) {
-        if (history.type === HistoryType.KHACH_TRA) {
-          c.totalCollectedNGN += history.moneyPaidNGN;
-        } else if (history.type === HistoryType.HOAN_TIEN) {
-          c.totalCollectedNGN -= history.moneyPaidNGN;
+      for (const product of order.products) {
+        for (const item of product.items) {
+          if (item.unitOfCalculation === UnitOfCalculation.KG) {
+            c.totalOrdersKg += item.quantity;
+          } else if (item.unitOfCalculation === UnitOfCalculation.PCS) {
+            c.totalOrdersPcs += item.quantity;
+          }
         }
       }
+
+      // Sử dụng giá trị đã trả từ hàm tính toán
+      c.totalCollectedNGN += financials.paidNGN;
+      c.totalCollectedUSD += financials.paidUSD;
     }
 
     return Array.from(customerMap.values()).map((c) => ({
@@ -95,10 +88,8 @@ export class GetDashboardCustomersUseCase {
       totalOrdersKg: roundToTwo(c.totalOrdersKg),
       totalOrdersPcs: roundToTwo(c.totalOrdersPcs),
       totalValueUSD: roundToTwo(c.totalValueUSD),
-      totalCollectedUSD: roundToTwo(c.totalCollectedUSD),
-      totalDebtUSD: roundToTwo(c.totalDebtUSD),
-      totalValueNGN: roundToTwo(c.totalValueNGN),
       totalCollectedNGN: roundToTwo(c.totalCollectedNGN),
+      totalCollectedUSD: roundToTwo(c.totalCollectedUSD),
     }));
   }
 }

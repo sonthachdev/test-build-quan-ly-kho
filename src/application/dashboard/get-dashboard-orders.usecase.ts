@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { HistoryType } from '../../common/enums/index.js';
+import { UnitOfCalculation } from '../../common/enums/index.js';
 import { getDateRange } from '../../common/utils/date.util.js';
 import { roundToTwo } from '../../common/utils/number.util.js';
-import { countItemQuantities } from '../../common/utils/order.util.js';
+import { computeOrderFinancials } from '../../common/utils/order-financial.util.js';
 import type { IOrderRepository } from '../../domain/order/order.repository.js';
 import { DashboardQueryDto } from './dto/dashboard-query.dto.js';
 
@@ -35,26 +35,23 @@ export class GetDashboardOrdersUseCase {
     for (const order of orders) {
       totalOrders += 1;
 
-      const orderTotalUsd = (order.totalUsd ?? 0) + (order.debt ?? 0);
-      const orderPaidedUsd = order.paidedUsd ?? 0;
-      const orderExchangeRate = order.exchangeRate ?? 0;
+      // Tính toán tài chính theo rule
+      const financials = computeOrderFinancials(order);
+      totalValueUSD += financials.totalUSD;
 
-      totalValueUSD += orderTotalUsd;
-      totalCollectedUSD += orderPaidedUsd;
-      totalDebtUSD += orderTotalUsd - orderPaidedUsd;
-      totalValueNGN += orderTotalUsd * orderExchangeRate;
-
-      const { kg, pcs } = countItemQuantities(order.products);
-      totalOrdersKg += kg;
-      totalOrdersPcs += pcs;
-
-      for (const history of order.history ?? []) {
-        if (history.type === HistoryType.KHACH_TRA) {
-          totalCollectedNGN += history.moneyPaidNGN;
-        } else if (history.type === HistoryType.HOAN_TIEN) {
-          totalCollectedNGN -= history.moneyPaidNGN;
+      for (const product of order.products) {
+        for (const item of product.items) {
+          if (item.unitOfCalculation === UnitOfCalculation.KG) {
+            totalOrdersKg += item.quantity;
+          } else if (item.unitOfCalculation === UnitOfCalculation.PCS) {
+            totalOrdersPcs += item.quantity;
+          }
         }
       }
+
+      // Sử dụng giá trị đã trả từ hàm tính toán
+      totalCollectedNGN += financials.paidNGN;
+      totalCollectedUSD += financials.paidUSD;
     }
 
     return {
